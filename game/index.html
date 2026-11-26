@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SKYLINE — Island Flight</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    background: #0b1c2c; font-family: "Segoe UI", Verdana, sans-serif; color: #eaf4ff; }
+  #scene { position: fixed; inset: 0; display: block; }
+  .hidden { display: none !important; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5;
+    text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+  .panel { background: rgba(6, 22, 36, .55); border: 1px solid rgba(140, 210, 255, .35);
+    border-radius: 8px; padding: 8px 12px; backdrop-filter: blur(2px); }
+  #hud-left { position: absolute; top: 12px; left: 12px; display: flex; gap: 10px; align-items: flex-start; }
+  #horizon-wrap { width: 132px; text-align: center; }
+  #horizon { width: 120px; height: 120px; border-radius: 50%;
+    border: 2px solid rgba(160, 220, 255, .7); background: #123; }
+  #horizon-wrap .lbl { font-size: 10px; letter-spacing: 2px; color: #9fd8ff; margin-top: 3px; }
+  .readout .lbl { font-size: 10px; letter-spacing: 2px; color: #9fd8ff; }
+  .readout .val { font-size: 30px; font-weight: 700; line-height: 1.05; color: #fff; }
+  .readout .unit { font-size: 11px; color: #9fd8ff; }
+  #compass { position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    width: 340px; text-align: center; padding: 6px 10px 8px; }
+  #compass-strip { font-size: 15px; letter-spacing: 6px; color: #cfeaff; white-space: nowrap;
+    overflow: hidden; font-weight: 600; }
+  #compass-hdg { font-size: 20px; font-weight: 700; color: #fff; }
+  #compass .tick { color: #ffd75e; }
+  #hud-right { position: absolute; top: 12px; right: 12px; text-align: right; min-width: 190px; }
+  #hud-right .row { display: flex; justify-content: space-between; gap: 14px; font-size: 14px; }
+  #hud-right .row b { color: #fff; }
+  #hud-right .lbl { color: #9fd8ff; font-size: 11px; letter-spacing: 1px; }
+  #fuel-bar { height: 8px; background: rgba(255,255,255,.18); border-radius: 4px; margin-top: 4px; overflow: hidden; }
+  #fuel-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #37d67a, #ffd75e); }
+  #fuel-fill.low { background: linear-gradient(90deg, #ff5a4e, #ff9a3d); }
+  #thr-bar { height: 8px; background: rgba(255,255,255,.18); border-radius: 4px; margin-top: 4px; overflow: hidden; }
+  #thr-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #3db9ff, #b7ecff); }
+  #warn { position: absolute; top: 150px; left: 50%; transform: translateX(-50%);
+    font-size: 26px; font-weight: 800; letter-spacing: 3px; color: #ff5a4e; display: none; }
+  #warn.show { display: block; animation: blink 0.5s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  #message { position: absolute; top: 22%; left: 50%; transform: translateX(-50%);
+    font-size: 24px; font-weight: 700; color: #fff; text-align: center; }
+  #message small { display: block; font-size: 15px; font-weight: 400; color: #cfeaff; margin-top: 4px; }
+  #objective { position: absolute; bottom: 14px; left: 12px; font-size: 14px; line-height: 1.5; }
+  #objective b { color: #ffd75e; }
+  #hint { position: absolute; bottom: 14px; right: 12px; font-size: 12px; color: #bfe3ff;
+    text-align: right; line-height: 1.6; }
+  body.cockpit-on #objective, body.cockpit-on #hint { bottom: 182px; }
+
+  /* ---------- Cockpit instrument panel ---------- */
+  #cockpit { position: fixed; left: 0; right: 0; bottom: 0; height: 168px; z-index: 6;
+    pointer-events: none; display: none;
+    background: linear-gradient(180deg, rgba(10,14,20,0) 0%, rgba(10,14,20,.55) 22%, #141a22 60%, #0c0f14 100%); }
+  #cockpit.on { display: block; }
+  #cockpit .frame { position: absolute; top: 0; left: 0; right: 0; height: 26px;
+    background: linear-gradient(180deg, #1c232e, #10151c); border-bottom: 2px solid #2c3846;
+    clip-path: polygon(0 0, 100% 0, 96% 100%, 4% 100%); }
+  #gauges { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 18px; }
+  #gauges canvas { width: 118px; height: 118px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 42%, #1d2733, #0a0e13 78%);
+    border: 3px solid #3a4757; box-shadow: 0 0 18px rgba(90, 200, 255, .25), inset 0 0 22px rgba(0,0,0,.8); }
+  #gauges .glabel { text-align: center; font-size: 10px; letter-spacing: 2px; color: #8fd0ff; margin-top: 2px; }
+
+  /* ---------- Menu / end screens ---------- */
+  .screen { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 30%, rgba(20, 60, 95, .88), rgba(4, 12, 22, .94)); }
+  .card { max-width: 640px; width: 92%; text-align: center; padding: 30px 34px;
+    background: rgba(8, 26, 42, .72); border: 1px solid rgba(140, 210, 255, .4);
+    border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  .card h1 { margin: 0 0 4px; font-size: 64px; letter-spacing: 12px; color: #fff;
+    text-shadow: 0 0 24px rgba(80, 190, 255, .8); }
+  .card h2 { margin: 0 0 14px; font-size: 15px; font-weight: 400; letter-spacing: 4px; color: #9fd8ff; }
+  .card p { font-size: 15px; line-height: 1.6; color: #d6e9f8; }
+  .card .keys { text-align: left; display: inline-block; font-size: 14px; line-height: 1.9; color: #cfeaff; }
+  .card .keys b { color: #ffd75e; display: inline-block; min-width: 150px; }
+  .btn { pointer-events: auto; cursor: pointer; margin: 8px 6px 0; padding: 12px 26px; font-size: 17px;
+    font-weight: 700; letter-spacing: 1px; color: #06283f; background: linear-gradient(180deg, #ffd75e, #f5a623);
+    border: none; border-radius: 10px; box-shadow: 0 4px 0 #a86f00, 0 8px 18px rgba(0,0,0,.5); }
+  .btn:hover { filter: brightness(1.08); }
+  .btn.ghost { background: rgba(160, 210, 255, .14); color: #cfeaff; box-shadow: none;
+    border: 1px solid rgba(160, 210, 255, .5); }
+  .btn.sel { outline: 3px solid #fff; }
+  #end-title { font-size: 44px; }
+  #end-stats { font-size: 17px; line-height: 2; color: #eaf4ff; }
+  #end-stats b { color: #ffd75e; }
+  #loading { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+    background: #0b1c2c; font-size: 18px; letter-spacing: 2px; color: #9fd8ff; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="hud-left">
+    <div id="horizon-wrap" class="panel">
+      <canvas id="horizon" width="240" height="240"></canvas>
+      <div class="lbl">ATTITUDE</div>
+    </div>
+    <div class="panel readout"><div class="lbl">ALTITUDE</div><div class="val"><span id="alt">0</span><span class="unit"> m</span></div></div>
+    <div class="panel readout"><div class="lbl">AIRSPEED</div><div class="val"><span id="spd">0</span><span class="unit"> kt</span></div></div>
+    <div class="panel readout"><div class="lbl">HEADING</div><div class="val"><span id="hdg">000</span><span class="unit">&deg;</span></div></div>
+  </div>
+  <div id="compass" class="panel">
+    <div id="compass-strip">N&nbsp;&nbsp;030&nbsp;&nbsp;060&nbsp;&nbsp;E&nbsp;&nbsp;120&nbsp;&nbsp;150&nbsp;&nbsp;S&nbsp;&nbsp;210&nbsp;&nbsp;240&nbsp;&nbsp;W&nbsp;&nbsp;300&nbsp;&nbsp;330</div>
+    <div><span class="tick">&#9660;</span> <span id="compass-hdg">000&deg;</span></div>
+  </div>
+  <div id="hud-right" class="panel">
+    <div class="row"><span class="lbl">MISSION</span><b id="mission-name">Island Tour</b></div>
+    <div class="row"><span class="lbl">RINGS</span><b id="rings">0 / 8</b></div>
+    <div class="row"><span class="lbl">SCORE</span><b id="score">0</b></div>
+    <div class="row"><span class="lbl">TIME</span><b id="time">0:00</b></div>
+    <div class="row"><span class="lbl">FUEL</span><b id="fuel-pct">100%</b></div>
+    <div id="fuel-bar"><div id="fuel-fill"></div></div>
+    <div class="row" style="margin-top:6px"><span class="lbl">THROTTLE</span><b id="thr-pct">0%</b></div>
+    <div id="thr-bar"><div id="thr-fill"></div></div>
+    <div class="row" style="margin-top:6px"><span class="lbl">DAMAGE</span><b id="damage">0%</b></div>
+  </div>
+  <div id="warn">STALL</div>
+  <div id="message"></div>
+  <div id="objective" class="panel"></div>
+  <div id="hint">C camera &middot; P pause &middot; R restart<br>drag mouse to steer &middot; wheel = throttle</div>
+</div>
+
+<div id="cockpit">
+  <div class="frame"></div>
+  <div id="gauges">
+    <div><canvas id="gauge-speed" width="240" height="240"></canvas><div class="glabel">AIRSPEED kt</div></div>
+    <div><canvas id="gauge-att" width="240" height="240"></canvas><div class="glabel">ATTITUDE</div></div>
+    <div><canvas id="gauge-alt" width="240" height="240"></canvas><div class="glabel">ALTITUDE m</div></div>
+    <div><canvas id="gauge-fuel" width="240" height="240"></canvas><div class="glabel">FUEL</div></div>
+  </div>
+</div>
+
+<div id="menu" class="screen">
+  <div class="card">
+    <h1>SKYLINE</h1>
+    <h2>ISLAND FLIGHT &middot; FLY THE RINGS, LAND THE PLANE</h2>
+    <p>Take off from Coral Bay runway, thread every glowing ring over the island,
+       then bring her home for a clean landing. Watch your fuel, mind your speed &mdash;
+       too slow and she stalls, too rough and she breaks.</p>
+    <p>
+      <button class="btn mission-btn sel" data-mission="tour">ISLAND TOUR &middot; 8 rings</button>
+      <button class="btn mission-btn" data-mission="sprint">SUNSET SPRINT &middot; 5 rings</button>
+    </p>
+    <p><button class="btn" id="start-btn">TAKE OFF &#9654;</button></p>
+    <div class="keys">
+      <div><b>&uarr; / &darr; or W / S</b> pitch up / down &nbsp;&middot;&nbsp; throttle with Shift / Ctrl</div>
+      <div><b>&larr; / &rarr; or A / D</b> roll &amp; turn &nbsp;&middot;&nbsp; Q / E rudder</div>
+      <div><b>C</b> chase / cockpit camera &nbsp;&middot;&nbsp; <b>mouse drag</b> steer &nbsp;&middot;&nbsp; <b>wheel</b> throttle</div>
+      <div><b>P</b> pause &nbsp;&middot;&nbsp; <b>R</b> restart &nbsp;&middot;&nbsp; <b>M</b> mute</div>
+    </div>
+  </div>
+</div>
+
+<div id="end" class="screen hidden">
+  <div class="card">
+    <h1 id="end-title">MISSION COMPLETE</h1>
+    <p id="end-sub"></p>
+    <div id="end-stats"></div>
+    <p>
+      <button class="btn" id="again-btn">FLY AGAIN &#8635;</button>
+      <button class="btn ghost" id="menu-btn">MAIN MENU</button>
+    </p>
+  </div>
+</div>
+
+<div id="loading">SKYLINE &mdash; loading the island&hellip;</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
