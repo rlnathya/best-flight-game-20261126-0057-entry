@@ -34,9 +34,15 @@ function handIn(): void {
   requireDir(SHOTS_DIR, 'screenshots/');
 
   // Start from a clean output directory so a stale file from an earlier
-  // run can never leak into the submission.
-  rmSync(OUTPUT_DIR, { recursive: true, force: true });
+  // run can never leak into the submission. The directory itself must
+  // never be removed: on the grader it is a mounted volume, and
+  // rmSync(recursive) on a mount point fails with EBUSY ("Device or
+  // resource busy"). So only its contents are deleted, one entry at a
+  // time.
   mkdirSync(OUTPUT_DIR, { recursive: true });
+  for (const entry of readdirSync(OUTPUT_DIR)) {
+    rmSync(join(OUTPUT_DIR, entry), { recursive: true, force: true });
+  }
 
   cpSync(GAME_DIR, join(OUTPUT_DIR, 'game'), { recursive: true });
   cpSync(SHOTS_DIR, join(OUTPUT_DIR, 'screenshots'), { recursive: true });
