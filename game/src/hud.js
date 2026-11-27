@@ -3,7 +3,7 @@
 // score and the objective; the canvas gauges draw the attitude ball and
 // the lit dials the cockpit view is judged by.
 
-import { formatTime, clamp } from './config.js';
+import { formatTime, clamp, RUNWAY } from './config.js';
 import { altitudeOf, headingDegOf, eulerOf } from './flight.js';
 import { bearingToNext, nextRingPosition } from './missions.js';
 
@@ -58,7 +58,8 @@ export function updateHud(state) {
       `BRG <b>${String(Math.round(nav.bearing)).padStart(3, '0')}&deg;</b> &middot; ` +
       `DIST <b>${Math.round(nav.distance)} m</b>`;
   } else {
-    obj.innerHTML = `ALL RINGS CLEAR &mdash; LAND ON <b>RUNWAY 36</b> &middot; ` +
+    const home = state.mission.landingRunway || RUNWAY;
+    obj.innerHTML = `ALL RINGS CLEAR &mdash; LAND ON <b>${home.label} &middot; ${home.name.toUpperCase()}</b> &middot; ` +
       `BRG <b>${String(Math.round(nav.bearing)).padStart(3, '0')}&deg;</b> &middot; ` +
       `DIST <b>${Math.round(nav.distance)} m</b>`;
   }

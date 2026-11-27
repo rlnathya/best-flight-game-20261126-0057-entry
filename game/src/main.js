@@ -6,16 +6,21 @@
 import * as THREE from 'three';
 import { MISSIONS, SHOT_POSES, RUNWAY, WORLD, clamp } from './config.js';
 import { buildTerrain, buildSea, buildSky, buildClouds, buildRunway, buildTown, buildTrees, terrainHeight } from './terrain.js';
+import { buildSecondAirfield } from './airfield.js';
 import { buildAircraft } from './aircraft.js';
 import { createFlightState, resetFlight, stepFlight, forwardOf, eulerOf, headingDegOf, altitudeOf, PHASE, applyShotPose, isOutOfBounds } from './flight.js';
 import { createMissionRings, disposeMissionRings, updateMissionRings } from './missions.js';
+import { createAutopilot, autopilotInput } from './autopilot.js';
 import { showHud, showCockpit, updateHud, setMessage, clearMessage } from './hud.js';
 import { ensureAudio, updateEngineSound, playRingChime, playTouchdown, playCrash, playClick, toggleMute } from './sound.js';
 
 const params = new URLSearchParams(window.location.search);
 const shotNumber = Number(params.get('shot') || 0);
 const shotMode = shotNumber >= 1 && shotNumber <= 4;
-const missionId = params.get('mission') === 'sprint' ? 'sprint' : 'tour';
+const missionParam = params.get('mission');
+const missionId = ['tour', 'sprint', 'landing'].includes(missionParam) ? missionParam : 'tour';
+const autoParam = params.get('auto');
+const autoMission = ['tour', 'sprint', 'landing'].includes(autoParam) ? autoParam : null;
 
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -30,6 +35,7 @@ buildTerrain(scene);
 buildSea(scene);
 buildClouds(scene);
 buildRunway(scene);
+buildSecondAirfield(scene);
 buildTown(scene);
 buildTrees(scene);
 
@@ -54,10 +60,18 @@ let selectedMission = missionId;
 let lastRingCount = 0;
 let wasRolling = false;
 let crashedAt = 0;
+let autopilot = null; // hands-free demo pilot; any manual input takes over
+const beamPivot = scene.getObjectByName('lighthouse-beam-pivot');
 
 // ---------------- input ----------------
 const keys = new Set();
 const mouse = { dragging: false, dx: 0, dy: 0, wheel: 0 };
+function takeOver() {
+  if (!autopilot) return;
+  autopilot = null;
+  setMessage('MANUAL CONTROL', 'You have the stick — fly her home.');
+  state.messageUntil = state.elapsed + 3;
+}
 window.addEventListener('keydown', (ev) => {
   if (ev.repeat) return;
   keys.add(ev.code);
@@ -67,10 +81,12 @@ window.addEventListener('keydown', (ev) => {
   if (ev.code === 'KeyP' || ev.code === 'Escape') togglePause();
   if (ev.code === 'KeyR') restartMission();
   if (ev.code === 'Enter' && state.phase === PHASE.MENU) startMission(selectedMission);
+  // Any flying input hands the plane back from the autopilot demo.
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyS', 'KeyA', 'KeyD', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight'].includes(ev.code)) takeOver();
   ensureAudio();
 });
 window.addEventListener('keyup', (ev) => keys.delete(ev.code));
-canvas.addEventListener('mousedown', (ev) => { mouse.dragging = true; mouse.dx = 0; mouse.dy = 0; });
+canvas.addEventListener('mousedown', (ev) => { mouse.dragging = true; mouse.dx = 0; mouse.dy = 0; takeOver(); });
 window.addEventListener('mouseup', () => { mouse.dragging = false; });
 window.addEventListener('mousemove', (ev) => {
   if (!mouse.dragging) return;
@@ -80,6 +96,7 @@ window.addEventListener('mousemove', (ev) => {
 canvas.addEventListener('wheel', (ev) => {
   ev.preventDefault();
   mouse.wheel += ev.deltaY < 0 ? 0.12 : -0.12;
+  takeOver();
 }, { passive: false });
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -129,7 +146,7 @@ function togglePause() {
 const menuEl = document.getElementById('menu');
 const endEl = document.getElementById('end');
 
-function startMission(id) {
+function startMission(id, auto = false) {
   selectedMission = id;
   disposeMissionRings(scene, missionRings);
   resetFlight(state, MISSIONS[id]);
@@ -143,8 +160,14 @@ function startMission(id) {
   showCockpit(cameraMode === 'cockpit');
   ensureAudio();
   playClick();
-  setMessage(`${state.mission.name.toUpperCase()}`, state.mission.blurb);
-  state.messageUntil = state.elapsed + 4;
+  autopilot = auto ? createAutopilot() : null;
+  if (auto) {
+    setMessage('AUTOPILOT DEMO', `${state.mission.name} — press any key or grab the mouse to take over.`);
+    state.messageUntil = state.elapsed + 5;
+  } else {
+    setMessage(`${state.mission.name.toUpperCase()}`, state.mission.blurb);
+    state.messageUntil = state.elapsed + 4;
+  }
 }
 
 function restartMission() {
@@ -170,6 +193,7 @@ function statsHtml(state) {
 }
 
 document.getElementById('start-btn').addEventListener('click', () => startMission(selectedMission));
+document.getElementById('demo-btn').addEventListener('click', () => startMission(selectedMission, true));
 document.getElementById('again-btn').addEventListener('click', () => restartMission());
 document.getElementById('menu-btn').addEventListener('click', () => {
   state.phase = PHASE.MENU;
@@ -235,7 +259,7 @@ function animate() {
     const pose = SHOT_POSES[shotNumber];
     applyShotPose(state, pose);
     cameraMode = pose.camera;
-    state.ringsPassed = shotNumber === 4 ? 7 : shotNumber - 1;
+    state.ringsPassed = pose.ringsPassed;
     state.score = state.ringsPassed * 1000;
     state.time = 95 + shotNumber * 23;
     state.fuel = 78 - shotNumber * 4;
@@ -249,8 +273,11 @@ function animate() {
     return;
   }
 
+  // The lighthouse beam sweeps the bay.
+  if (beamPivot) beamPivot.rotation.y += dt * 0.25;
+
   if (state.phase === PHASE.FLYING) {
-    const input = readInput(dt);
+    const input = autopilot ? autopilotInput(autopilot, state, dt) : readInput(dt);
     stepFlight(state, input, dt);
     if (updateMissionRings(state, missionRings, state.elapsed)) playRingChime();
     if (!wasRolling && state.rolling && state.landed) playTouchdown();
@@ -300,16 +327,21 @@ function animate() {
 }
 
 // Screenshot mode starts flying immediately, menu hidden, HUD on.
+// Each pose names its own mission, so the rings and the beacon in frame
+// belong to that sortie (shot 3 is the Harbour Landing final).
 if (shotMode) {
   const pose = SHOT_POSES[shotNumber];
+  const shotMission = MISSIONS[pose.mission || 'tour'];
   cameraMode = pose.camera;
   menuEl.classList.add('hidden');
   document.getElementById('loading').remove();
   showHud(true);
   showCockpit(cameraMode === 'cockpit');
-  state.mission = MISSIONS.tour;
+  state.mission = shotMission;
+  disposeMissionRings(scene, missionRings);
+  missionRings = createMissionRings(scene, shotMission);
   applyShotPose(state, pose);
-  state.ringsPassed = shotNumber === 4 ? 7 : shotNumber - 1;
+  state.ringsPassed = pose.ringsPassed;
   state.score = state.ringsPassed * 1000;
   state.time = 95 + shotNumber * 23;
   state.fuel = 78 - shotNumber * 4;
@@ -327,7 +359,16 @@ if (shotMode) {
   updateHud(state);
 } else {
   document.getElementById('loading').remove();
+  // ?auto=tour|sprint|landing starts the autopilot demo at once, so the
+  // game can be driven headlessly end to end with no input.
+  if (autoMission) startMission(autoMission, true);
 }
 
 animate();
-window.__skyline = { state, get phase() { return state.phase; }, startMission, restartMission };
+window.__skyline = {
+  state,
+  get phase() { return state.phase; },
+  get autopilotPhase() { return autopilot ? autopilot.phase : null; },
+  get autopilotGoArounds() { return autopilot ? autopilot.goArounds : 0; },
+  startMission, restartMission,
+};

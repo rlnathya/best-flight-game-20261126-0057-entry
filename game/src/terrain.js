@@ -4,7 +4,7 @@
 // fixed-seed generator: the island is identical on every load.
 
 import * as THREE from 'three';
-import { WORLD, RUNWAY, clamp, smoothstep } from './config.js';
+import { WORLD, RUNWAY, RUNWAY2, clamp, smoothstep } from './config.js';
 
 export function mulberry32(seed) {
   let a = seed >>> 0;
@@ -41,6 +41,11 @@ export function terrainHeight(x, z) {
   const dz = Math.abs(z - RUNWAY.z);
   const pad = 1 - smoothstep(0, 1, Math.max((dx - 130) / 170, (dz - 420) / 190));
   h = h * (1 - pad) + WORLD.runwayAltitude * pad;
+  // Same for the second airfield, Harbour Field on the east coast.
+  const dx2 = Math.abs(x - RUNWAY2.x);
+  const dz2 = Math.abs(z - RUNWAY2.z);
+  const pad2 = 1 - smoothstep(0, 1, Math.max((dx2 - 130) / 170, (dz2 - 380) / 190));
+  h = h * (1 - pad2) + WORLD.runwayAltitude * pad2;
   return h;
 }
 
@@ -83,10 +88,18 @@ export function buildSea(scene) {
   const geo = new THREE.PlaneGeometry(WORLD.size * 2.4, WORLD.size * 2.4);
   geo.rotateX(-Math.PI / 2);
   const sea = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({
-    color: 0x1a6f9e, transparent: true, opacity: 0.92, shininess: 120, specular: 0x99ccff,
+    color: 0x14608f, transparent: true, opacity: 0.94, shininess: 180, specular: 0xbbddff,
   }));
   sea.position.y = WORLD.seaLevel;
   scene.add(sea);
+  // Surf foam where the sea meets the island: a pale annulus hugging the
+  // coastline, so the shore reads from altitude.
+  const foam = new THREE.Mesh(
+    new THREE.RingGeometry(1930, 2130, 96),
+    new THREE.MeshBasicMaterial({ color: 0xeaf7ff, transparent: true, opacity: 0.28, side: THREE.DoubleSide }));
+  foam.rotation.x = -Math.PI / 2;
+  foam.position.y = WORLD.seaLevel + 0.15;
+  scene.add(foam);
   return sea;
 }
 
@@ -104,17 +117,17 @@ export function buildClouds(scene) {
   const group = new THREE.Group();
   const rng = mulberry32(20261126);
   const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92 });
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 34; i++) {
     const cloud = new THREE.Group();
-    const puffs = 3 + Math.floor(rng() * 3);
+    const puffs = 4 + Math.floor(rng() * 3);
     for (let p = 0; p < puffs; p++) {
-      const r = 26 + rng() * 34;
+      const r = 28 + rng() * 38;
       const s = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), mat);
-      s.position.set((rng() - 0.5) * 130, (rng() - 0.5) * 12, (rng() - 0.5) * 60);
+      s.position.set((rng() - 0.5) * 150, (rng() - 0.5) * 12, (rng() - 0.5) * 70);
       s.scale.y = 0.42;
       cloud.add(s);
     }
-    cloud.position.set((rng() - 0.5) * 4600, 330 + rng() * 180, (rng() - 0.5) * 4600);
+    cloud.position.set((rng() - 0.5) * 4600, 300 + rng() * 220, (rng() - 0.5) * 4600);
     group.add(cloud);
   }
   scene.add(group);
@@ -188,10 +201,14 @@ export function buildRunway(scene) {
 
 // Coral Bay town: a tight cluster of small coloured houses with red roofs,
 // plus a lighthouse on the southern point so the coast reads at a glance.
+// Windows glow warm and a few street lamps stand along the main street,
+// so the town stays alive from the air at any hour.
 export function buildTown(scene) {
   const group = new THREE.Group();
   const rng = mulberry32(777);
   const wallColors = [0xf3e2c7, 0xffffff, 0xffd9a0, 0xcfe4f7, 0xf7c8c8];
+  const winGeo = new THREE.PlaneGeometry(2.4, 3.2);
+  const winMat = new THREE.MeshBasicMaterial({ color: 0xffd97a });
   for (let i = 0; i < 54; i++) {
     const w = 9 + rng() * 10, d = 9 + rng() * 10, h = 6 + rng() * 14;
     const x = 330 + (rng() - 0.5) * 420;
@@ -207,6 +224,31 @@ export function buildTown(scene) {
     roof.position.set(x, gy + h + 2.2, z);
     roof.rotation.y = Math.PI / 4 + house.rotation.y;
     group.add(roof);
+    // One lit window on the front face, turned with the house.
+    if (rng() < 0.75) {
+      const win = new THREE.Mesh(winGeo, winMat);
+      const fy = house.rotation.y;
+      win.position.set(
+        x + Math.sin(fy) * (d / 2 + 0.08),
+        gy + h * 0.45,
+        z + Math.cos(fy) * (d / 2 + 0.08));
+      win.rotation.y = fy;
+      group.add(win);
+    }
+  }
+  // Street lamps down the town's main street (roughly north-south).
+  const lampPoleMat = new THREE.MeshLambertMaterial({ color: 0x3a3f45 });
+  const lampGlowMat = new THREE.MeshBasicMaterial({ color: 0xffe9a8 });
+  for (let i = 0; i < 8; i++) {
+    const x = 330 + (rng() - 0.5) * 60;
+    const z = 160 + i * 48;
+    const gy = terrainHeight(x, z);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 7, 6), lampPoleMat);
+    pole.position.set(x, gy + 3.5, z);
+    group.add(pole);
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(1.1, 8, 6), lampGlowMat);
+    glow.position.set(x, gy + 7.2, z);
+    group.add(glow);
   }
   // Lighthouse on the south point.
   const lx = 60, lz = 1750, ly = terrainHeight(lx, lz);
@@ -222,6 +264,22 @@ export function buildTown(scene) {
     new THREE.MeshBasicMaterial({ color: 0xfff2b0 }));
   lamp.position.set(lx, ly + 36, lz);
   group.add(lamp);
+  // The beam: a long soft cone on a pivot at the lamp, spun by the main
+  // loop so the lighthouse sweeps the bay. The cone's apex sits at the
+  // lamp; its wide end reaches out over the water.
+  const beamPivot = new THREE.Group();
+  beamPivot.name = 'lighthouse-beam-pivot';
+  beamPivot.position.set(lx, ly + 36, lz);
+  const beam = new THREE.Mesh(
+    new THREE.ConeGeometry(17, 260, 12, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: 0xfff2b0, transparent: true, opacity: 0.16,
+      side: THREE.DoubleSide, depthWrite: false,
+    }));
+  beam.rotation.z = Math.PI / 2;
+  beam.position.x = 130;
+  beamPivot.add(beam);
+  group.add(beamPivot);
   scene.add(group);
   return group;
 }
@@ -239,6 +297,7 @@ export function buildTrees(scene) {
     const h = terrainHeight(x, z);
     if (h < 4 || h > 120) continue;
     if (Math.abs(x - RUNWAY.x) < 160 && Math.abs(z - RUNWAY.z) < 460) continue;
+    if (Math.abs(x - RUNWAY2.x) < 160 && Math.abs(z - RUNWAY2.z) < 420) continue;
     const s = 0.7 + rng() * 0.9;
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
     trunk.position.set(x, h + 3 * s, z); trunk.scale.setScalar(s);
@@ -250,9 +309,17 @@ export function buildTrees(scene) {
   return group;
 }
 
-export function isOnRunway(x, z) {
-  return Math.abs(x - RUNWAY.x) <= RUNWAY.width / 2 + 6
-    && Math.abs(z - RUNWAY.z) <= RUNWAY.length / 2 + 6;
+export function isOnRunway(x, z, runway = RUNWAY) {
+  return Math.abs(x - runway.x) <= runway.width / 2 + 6
+    && Math.abs(z - runway.z) <= runway.length / 2 + 6;
+}
+
+// Which strip, if any, the point is on: Harbour Field first, then Coral
+// Bay (the strips never overlap, so the order is only a tie-break).
+export function runwayAt(x, z) {
+  if (isOnRunway(x, z, RUNWAY2)) return RUNWAY2;
+  if (isOnRunway(x, z, RUNWAY)) return RUNWAY;
+  return null;
 }
 export function distanceToRunwayCentre(x, z) {
   return Math.hypot(x - RUNWAY.x, z - RUNWAY.z);

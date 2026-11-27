@@ -13,6 +13,18 @@ export const RUNWAY = {
   x: 0, z: -260,       // centre of the strip
   length: 640, width: 42,
   headingDeg: 0,       // strip runs north-south (along -Z take-off)
+  name: 'Coral Bay',   // home airfield, land heading north
+  label: 'RUNWAY 36',
+};
+
+// Second airfield on the east coast, beside the town: a shorter strip the
+// Harbour Landing sortie finishes on, landing southbound.
+export const RUNWAY2 = {
+  x: 1350, z: 420,     // centre of the strip
+  length: 560, width: 40,
+  headingDeg: 180,     // land heading south, over the north threshold
+  name: 'Harbour Field',
+  label: 'RUNWAY 18',
 };
 
 export const PLANE = {
@@ -32,8 +44,12 @@ export const PLANE = {
 
 export const RING_RADIUS = 30;
 
-// Two sorties over the same island. Tour is the gentle introduction;
-// Sprint is lower, tighter and thirstier, with a par time to beat.
+// Three sorties over the same island. Tour is the gentle introduction;
+// Sprint is lower, tighter and thirstier, with a par time to beat;
+// Harbour Landing threads six rings east across the island and finishes
+// with a southbound landing on the second airfield, Harbour Field.
+// Every mission takes off from Coral Bay; `landingRunway` says which
+// strip the sortie must finish on (Coral Bay when omitted).
 export const MISSIONS = {
   tour: {
     id: 'tour',
@@ -66,15 +82,35 @@ export const MISSIONS = {
       { x: 900,  y: 110, z: -500 },
     ],
   },
+  landing: {
+    id: 'landing',
+    name: 'Harbour Landing',
+    blurb: 'Six rings east across the island, then a southbound landing on Harbour Field runway 18.',
+    parSeconds: 300,
+    fuel: 90,
+    landingRunway: RUNWAY2,
+    rings: [
+      { x: 350,  y: 140, z: -700 },
+      { x: 950,  y: 160, z: -500 },
+      { x: 1400, y: 120, z: -300 },
+      { x: 1750, y: 110, z: -100 },
+      { x: 1350, y: 70,  z: -250 },
+      { x: 1350, y: 45,  z: 60 },
+    ],
+  },
 };
 
 // Fixed screenshot poses: plane position, heading and camera for each
 // ?shot=1..4 frame, so every render is identical run to run.
+// 1: cover — chase view, first tour ring dead ahead.
+// 2: cockpit over the town, next ring beyond the rooftops.
+// 3: chase on short final to Harbour Field runway 18, ring + strip ahead.
+// 4: chase high over the north-west mountains, sea and clouds ahead.
 export const SHOT_POSES = {
-  1: { pos: [0, 125, -350], headingDeg: 0, pitchDeg: -2, speed: 62, throttle: 0.62, camera: 'chase' },
-  2: { pos: [0, 58, 480], headingDeg: 0, pitchDeg: -4, speed: 58, throttle: 0.55, camera: 'cockpit' },
-  3: { pos: [-900, 235, 120], headingDeg: 23, pitchDeg: 0, speed: 66, throttle: 0.7, camera: 'chase' },
-  4: { pos: [0, 52, 260], headingDeg: 0, pitchDeg: -6, speed: 52, throttle: 0.45, camera: 'cockpit' },
+  1: { mission: 'tour', pos: [0, 120, -600], headingDeg: 0, pitchDeg: -2, speed: 62, throttle: 0.62, camera: 'chase', ringsPassed: 0 },
+  2: { mission: 'tour', pos: [600, 140, 0], headingDeg: 140, pitchDeg: -4, speed: 58, throttle: 0.55, camera: 'cockpit', ringsPassed: 4 },
+  3: { mission: 'landing', pos: [1350, 75, -350], headingDeg: 180, pitchDeg: -3, speed: 55, throttle: 0.5, camera: 'chase', ringsPassed: 5 },
+  4: { mission: 'tour', pos: [1100, 280, 1400], headingDeg: 20, pitchDeg: -2, speed: 66, throttle: 0.7, camera: 'chase', ringsPassed: 2 },
 };
 
 export function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }

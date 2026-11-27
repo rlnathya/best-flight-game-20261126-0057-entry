@@ -5,7 +5,7 @@
 
 import * as THREE from 'three';
 import { PLANE, RUNWAY, WORLD, clamp, degToRad } from './config.js';
-import { terrainHeight, isOnRunway } from './terrain.js';
+import { terrainHeight, runwayAt } from './terrain.js';
 
 export const PHASE = {
   MENU: 'menu',
@@ -194,18 +194,28 @@ function checkGround(state) {
   const e = eulerOf(state);
   const descent = -state.verticalSpeed;
   const gentle = descent < 6 && state.speed < 58 && Math.abs(e.z) < 0.3 && Math.abs(e.x) < 0.22;
-  if (isOnRunway(state.pos.x, state.pos.z) && gentle) {
-    // Touchdown on the strip: roll out, refuel, finish the mission.
+  const strip = runwayAt(state.pos.x, state.pos.z);
+  if (strip && gentle) {
+    // Touchdown on a strip: roll out, refuel, and finish the mission —
+    // but only when the strip is the one this sortie must land on.
+    // Landing on the other airfield with all rings flown is a wrong-field
+    // touchdown: refuel and take off again for the right strip.
     state.pos.y = ground + 2.2;
     state.rolling = true;
     state.landed = true;
     state.fuel = Math.min(100, state.fuel + 40);
-    if (state.ringsPassed >= state.mission.rings.length) {
+    const home = state.mission.landingRunway || RUNWAY;
+    if (state.ringsPassed >= state.mission.rings.length && strip === home) {
       finishMission(state, 'landed');
     } else if (state.elapsed - (state.touchdownBonusAt ?? -99) > 15) {
       state.touchdownBonusAt = state.elapsed;
-      state.message = 'TOUCHDOWN — refuelled. Take off and finish the rings!';
-      state.messageUntil = state.elapsed + 4;
+      if (state.ringsPassed >= state.mission.rings.length) {
+        state.message = `TOUCHDOWN — wrong field! Land at ${home.name} (${home.label}).`;
+        state.messageUntil = state.elapsed + 4;
+      } else {
+        state.message = 'TOUCHDOWN — refuelled. Take off and finish the rings!';
+        state.messageUntil = state.elapsed + 4;
+      }
       state.score += 250;
     }
     return;

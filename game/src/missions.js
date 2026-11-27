@@ -3,7 +3,7 @@
 // as a gate to fly through rather than a floating hoop.
 
 import * as THREE from 'three';
-import { RING_RADIUS } from './config.js';
+import { RING_RADIUS, RUNWAY } from './config.js';
 import { buildRing } from './aircraft.js';
 import { checkRing } from './flight.js';
 
@@ -56,7 +56,8 @@ export function updateMissionRings(state, missionRings, elapsed) {
       missionRings.beacon.position.y += 380;
     } else {
       missionRings.beacon.visible = false;
-      state.message = 'ALL RINGS CLEAR — land on the runway to finish!';
+      const home = state.mission.landingRunway || RUNWAY;
+      state.message = `ALL RINGS CLEAR — land on ${home.label} (${home.name}) to finish!`;
       state.messageUntil = state.elapsed + 5;
     }
     return true;
@@ -75,8 +76,9 @@ export function nextRingPosition(state) {
 
 // Bearing from the plane to the next objective, in degrees (0 = north).
 export function bearingToNext(state) {
+  const home = state.mission.landingRunway || RUNWAY;
   const target = nextRingPosition(state)
-    || new THREE.Vector3(0, 10, -260); // runway when rings are done
+    || new THREE.Vector3(home.x, 10, home.z); // home strip when rings are done
   const dx = target.x - state.pos.x;
   const dz = target.z - state.pos.z;
   let b = Math.atan2(dx, -dz) * 180 / Math.PI;
