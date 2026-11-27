@@ -75,9 +75,9 @@ export const MISSIONS = {
     parSeconds: 240,
     fuel: 80,
     rings: [
-      { x: -300, y: 70,  z: -1000 },
+      { x: -300, y: 80,  z: -1000 },
       { x: -1100, y: 95, z: -250 },
-      { x: -500, y: 80,  z: 950 },
+      { x: -500, y: 90,  z: 950 },
       { x: 800,  y: 90,  z: 700 },
       { x: 900,  y: 110, z: -500 },
     ],
@@ -98,6 +98,27 @@ export const MISSIONS = {
       { x: 1350, y: 45,  z: 60 },
     ],
   },
+  // Dusk Cargo: the same island at dusk, flown by the town lights and
+  // the lighthouse beam. Six rings south past the town to the lighthouse
+  // point, then back north to land on Coral Bay runway 36 as the light
+  // goes. The low sun and lit windows make it a different sortie to
+  // read, not just a longer one.
+  dusk: {
+    id: 'dusk',
+    name: 'Dusk Cargo',
+    blurb: 'Six rings over the lit town at dusk — follow the lighthouse beam home to runway 36.',
+    parSeconds: 300,
+    fuel: 85,
+    dusk: true,
+    rings: [
+      { x: 200,  y: 100, z: -700 },
+      { x: 650,  y: 120, z: 150 },
+      { x: 350,  y: 130, z: 1150 },
+      { x: 80,   y: 120, z: 1650 },
+      { x: 950,  y: 110, z: 850 },
+      { x: 700,  y: 90,  z: -450 },
+    ],
+  },
 };
 
 // Fixed screenshot poses: plane position, heading and camera for each
@@ -105,12 +126,13 @@ export const MISSIONS = {
 // 1: cover — chase view, first tour ring dead ahead.
 // 2: cockpit over the town, next ring beyond the rooftops.
 // 3: chase on short final to Harbour Field runway 18, ring + strip ahead.
-// 4: chase high over the north-west mountains, sea and clouds ahead.
+// 4: chase at dusk over the town, Dusk Cargo ring 3 and the lighthouse
+// beam ahead — the new sortie, the lit town and the shader terrain.
 export const SHOT_POSES = {
   1: { mission: 'tour', pos: [0, 120, -600], headingDeg: 0, pitchDeg: -2, speed: 62, throttle: 0.62, camera: 'chase', ringsPassed: 0 },
   2: { mission: 'tour', pos: [600, 140, 0], headingDeg: 140, pitchDeg: -4, speed: 58, throttle: 0.55, camera: 'cockpit', ringsPassed: 4 },
-  3: { mission: 'landing', pos: [1350, 75, -350], headingDeg: 180, pitchDeg: -3, speed: 55, throttle: 0.5, camera: 'chase', ringsPassed: 5 },
-  4: { mission: 'tour', pos: [1100, 280, 1400], headingDeg: 20, pitchDeg: -2, speed: 66, throttle: 0.7, camera: 'chase', ringsPassed: 2 },
+  3: { mission: 'landing', pos: [1350, 95, -550], headingDeg: 180, pitchDeg: -3, speed: 55, throttle: 0.5, camera: 'chase', ringsPassed: 5 },
+  4: { mission: 'dusk', pos: [450, 160, 750], headingDeg: 166, pitchDeg: -3, speed: 58, throttle: 0.55, camera: 'chase', ringsPassed: 2 },
 };
 
 export function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }

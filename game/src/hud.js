@@ -6,6 +6,7 @@
 import { formatTime, clamp, RUNWAY } from './config.js';
 import { altitudeOf, headingDegOf, eulerOf } from './flight.js';
 import { bearingToNext, nextRingPosition } from './missions.js';
+import { drawAvionics } from './avionics.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -71,6 +72,7 @@ export function updateHud(state) {
 
   drawHorizon(state);
   drawGauges(state);
+  drawAvionics(state);
 }
 
 // Artificial horizon: blue sky / brown ground split by pitch and roll.

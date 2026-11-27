@@ -49,35 +49,82 @@ export function terrainHeight(x, z) {
   return h;
 }
 
-function groundColor(height, x, z, out) {
-  if (height < 2.5) { out.setRGB(0.85, 0.76, 0.52); return out; }       // sand
-  if (height < 55) { out.setRGB(0.32, 0.55, 0.26); return out; }        // low grass
-  if (height < 130) { out.setRGB(0.22, 0.45, 0.22); return out; }       // forest green
-  if (height < 200) { out.setRGB(0.45, 0.42, 0.36); return out; }       // rock
-  out.setRGB(0.92, 0.93, 0.95); return out;                             // snow caps
-}
-
 export function buildTerrain(scene) {
   const size = WORLD.size;
   const segments = 180;
   const geo = new THREE.PlaneGeometry(size, size, segments, segments);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
-  const colors = new Float32Array(pos.count * 3);
-  const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const z = pos.getZ(i);
-    const h = terrainHeight(x, z);
-    pos.setY(i, h);
-    groundColor(h, x, z, c);
-    // Gentle variation so flat areas still read as terrain.
-    const v = 0.94 + 0.06 * Math.sin(x * 0.05 + z * 0.043);
-    colors[i * 3] = c.r * v; colors[i * 3 + 1] = c.g * v; colors[i * 3 + 2] = c.b * v;
+    pos.setY(i, terrainHeight(pos.getX(i), pos.getZ(i)));
   }
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  // Height-and-slope blend shader, written for this island: five bands
+  // (sand, grass, forest, rock, snow) eased into each other by altitude,
+  // with steep ground fading to bare rock whatever its height, and a
+  // slow sine wobble so flat fields still read as terrain. Lighting is
+  // a single sun direction plus a flat sky ambient, and the standard
+  // fog chunks keep the far island fading exactly like the sea and sky.
+  const mat = new THREE.ShaderMaterial({
+    fog: true,
+    uniforms: THREE.UniformsUtils.merge([
+      THREE.UniformsLib.fog,
+      {
+        sunDir: { value: new THREE.Vector3(0.5, 0.78, 0.28).normalize() },
+        // 0 in daylight, 1 at dusk: the main loop fades the ground down
+        // to a blue dusk wash so the terrain matches the dusk sky.
+        duskMix: { value: 0 },
+      },
+    ]),
+    vertexShader: /* glsl */`
+      varying vec3 vNorm;
+      varying float vHigh;
+      varying vec2 vGround;
+      #include <fog_pars_vertex>
+      void main() {
+        vNorm = normalize(normal);
+        vHigh = position.y;
+        vGround = position.xz;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: /* glsl */`
+      uniform vec3 sunDir;
+      uniform float duskMix;
+      varying vec3 vNorm;
+      varying float vHigh;
+      varying vec2 vGround;
+      #include <fog_pars_fragment>
+      void main() {
+        float h = vHigh;
+        float slope = clamp(vNorm.y, 0.0, 1.0);
+        vec3 sand = vec3(0.85, 0.76, 0.52);
+        vec3 grass = vec3(0.32, 0.55, 0.26);
+        vec3 forest = vec3(0.22, 0.45, 0.22);
+        vec3 rock = vec3(0.45, 0.42, 0.36);
+        vec3 snow = vec3(0.92, 0.93, 0.95);
+        vec3 col = mix(sand, grass, smoothstep(2.0, 8.0, h));
+        col = mix(col, forest, smoothstep(45.0, 70.0, h));
+        col = mix(col, rock, smoothstep(120.0, 160.0, h));
+        // Steep ground is bare rock at any height; flat high ground
+        // keeps its snow cap.
+        float steep = smoothstep(0.72, 0.55, slope);
+        col = mix(col, rock, steep * 0.75);
+        col = mix(col, snow, smoothstep(195.0, 225.0, h) * smoothstep(0.55, 0.75, slope));
+        // Gentle variation + fine grain so plains are not flat colour.
+        float wob = sin(vGround.x * 0.05 + vGround.y * 0.043) * 0.5 + 0.5;
+        col *= 0.94 + 0.06 * wob;
+        col *= 1.0 + 0.03 * sin(vGround.x * 0.35) * sin(vGround.y * 0.31);
+        float sun = max(dot(normalize(vNorm), sunDir), 0.0);
+        vec3 lit = col * (0.48 + 0.72 * sun);
+        // Dusk: the same ground, dimmed into a blue wash.
+        vec3 duskLit = col * vec3(0.30, 0.34, 0.52);
+        lit = mix(lit, duskLit, duskMix);
+        gl_FragColor = vec4(lit, 1.0);
+        #include <fog_fragment>
+      }`,
+  });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = false;
   scene.add(mesh);
@@ -109,8 +156,11 @@ export function buildSky(scene) {
   const sun = new THREE.DirectionalLight(0xfff2d8, 2.1);
   sun.position.set(900, 1400, 500);
   scene.add(sun);
-  scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x3d6b3a, 0.9));
-  return sun;
+  const hemi = new THREE.HemisphereLight(0xbfe3ff, 0x3d6b3a, 0.9);
+  scene.add(hemi);
+  // Both lights come back so the main loop can dim them for the dusk
+  // sortie and bring the day back for the others.
+  return { sun, hemi };
 }
 
 export function buildClouds(scene) {

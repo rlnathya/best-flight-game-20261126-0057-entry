@@ -18,9 +18,9 @@ const params = new URLSearchParams(window.location.search);
 const shotNumber = Number(params.get('shot') || 0);
 const shotMode = shotNumber >= 1 && shotNumber <= 4;
 const missionParam = params.get('mission');
-const missionId = ['tour', 'sprint', 'landing'].includes(missionParam) ? missionParam : 'tour';
+const missionId = ['tour', 'sprint', 'landing', 'dusk'].includes(missionParam) ? missionParam : 'tour';
 const autoParam = params.get('auto');
-const autoMission = ['tour', 'sprint', 'landing'].includes(autoParam) ? autoParam : null;
+const autoMission = ['tour', 'sprint', 'landing', 'dusk'].includes(autoParam) ? autoParam : null;
 
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -30,8 +30,8 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 12000);
 
-buildSky(scene);
-buildTerrain(scene);
+const skyLights = buildSky(scene);
+const terrainMesh = buildTerrain(scene);
 buildSea(scene);
 buildClouds(scene);
 buildRunway(scene);
@@ -62,6 +62,21 @@ let wasRolling = false;
 let crashedAt = 0;
 let autopilot = null; // hands-free demo pilot; any manual input takes over
 const beamPivot = scene.getObjectByName('lighthouse-beam-pivot');
+
+// Dusk lighting for the Dusk Cargo sortie: a low amber sun, a violet
+// sky and a stronger lighthouse beam, so the town lights read as the
+// navigation they are. Day settings come back for every other sortie.
+function setDuskMode(on) {
+  scene.background.set(on ? 0x2a3558 : 0x87bfe8);
+  scene.fog.color.set(on ? 0x35406b : 0x9fc8e8);
+  skyLights.sun.color.set(on ? 0xff9a5c : 0xfff2d8);
+  skyLights.sun.intensity = on ? 1.0 : 2.1;
+  skyLights.hemi.intensity = on ? 0.5 : 0.9;
+  terrainMesh.material.uniforms.duskMix.value = on ? 1 : 0;
+  if (beamPivot && beamPivot.children[0]) {
+    beamPivot.children[0].material.opacity = on ? 0.34 : 0.16;
+  }
+}
 
 // ---------------- input ----------------
 const keys = new Set();
@@ -148,6 +163,7 @@ const endEl = document.getElementById('end');
 
 function startMission(id, auto = false) {
   selectedMission = id;
+  setDuskMode(!!MISSIONS[id].dusk);
   disposeMissionRings(scene, missionRings);
   resetFlight(state, MISSIONS[id]);
   missionRings = createMissionRings(scene, state.mission);
@@ -197,6 +213,7 @@ document.getElementById('demo-btn').addEventListener('click', () => startMission
 document.getElementById('again-btn').addEventListener('click', () => restartMission());
 document.getElementById('menu-btn').addEventListener('click', () => {
   state.phase = PHASE.MENU;
+  setDuskMode(false);
   endEl.classList.add('hidden');
   menuEl.classList.remove('hidden');
   showHud(false); showCockpit(false);
@@ -332,6 +349,7 @@ function animate() {
 if (shotMode) {
   const pose = SHOT_POSES[shotNumber];
   const shotMission = MISSIONS[pose.mission || 'tour'];
+  setDuskMode(!!shotMission.dusk);
   cameraMode = pose.camera;
   menuEl.classList.add('hidden');
   document.getElementById('loading').remove();

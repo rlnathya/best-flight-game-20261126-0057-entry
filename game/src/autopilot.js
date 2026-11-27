@@ -18,7 +18,7 @@ const FIX_DISTANCE = 1400; // metres out from the threshold, on centreline
 const FIX_ALTITUDE = 150;  // metres, level at the fix before descending
 const GLIDE_SLOPE = 0.088; // ~5 degrees: the fix altitude meets the runway
 const FLARE_AGL = 13;      // metres: throttle idle, settle onto the strip
-const TERRAIN_CLEARANCE = 28; // metres above the highest ground ahead
+const TERRAIN_CLEARANCE = 36; // metres above the highest ground ahead
 
 export function createAutopilot() {
   return {

@@ -24,6 +24,8 @@ Pick a sortie on the menu and press **Take Off**:
 - **Sunset Sprint** — 5 low rings, little fuel, beat the clock.
 - **Harbour Landing** — 6 rings east across the island, then a southbound
   landing on Harbour Field runway 18, the second airfield.
+- **Dusk Cargo** — 6 rings over the lit town at dusk, following the town
+  lights and the lighthouse beam home to Coral Bay runway 36.
 
 Fly every ring in order (each is worth 1000 points), then land on your
 sortie's own runway to finish — landing on the other airfield with all
@@ -50,11 +52,11 @@ press any key or grab the mouse to take over at any moment.
 
 ## Features
 
-- Procedural island terrain (beaches, hills, two mountain ranges, snow caps), sea with surf foam, town with red roofs and lit windows, a lighthouse with a sweeping beam, two runways with markings and edge lights, deterministic clouds and trees.
+- Procedural island terrain (beaches, hills, two mountain ranges, snow caps), sea with surf foam, town with red roofs and lit windows, a lighthouse with a sweeping beam, two runways with markings and edge lights, deterministic clouds and trees. The terrain is shaded by a custom GLSL shader that blends sand, grass, forest, rock and snow by altitude and slope, and dims to a blue dusk wash on the Dusk Cargo sortie.
 - Flight model with throttle, drag, climb penalty, coordinated turns, stall with nose drop, ground effect-free but honest landings, ditching and crash detection.
-- Two cameras: three-quarter chase view and a cockpit view with a lit instrument panel (airspeed, attitude, altitude and fuel dials).
+- Two cameras: three-quarter chase view and a cockpit view with a lit instrument panel (airspeed, attitude, altitude and fuel dials) plus a glass avionics strip: a moving pitch ladder and a scrolling heading tape.
 - Full HUD: artificial horizon, altitude, airspeed, heading, compass strip, fuel and throttle bars, damage, score, timer, and a next-ring bearing/distance readout.
-- Three missions across two airfields, fuel and damage as real decisions, mission-complete and crash screens with a score breakdown.
+- Four missions across two airfields, fuel and damage as real decisions, mission-complete and crash screens with a score breakdown.
 - An autopilot demo that flies any sortie end to end — take-off, rings, a lined-up final with a flare, and a touchdown — and hands the stick back the moment you touch a control.
 - Deterministic screenshot mode: `game/index.html?shot=1..4` freezes a fixed pose for each render.
 
